@@ -75,6 +75,12 @@ body.theme-dark .about {
   background: var(--card);
 }
 
+body.theme-dark .icon {
+  background: #f4f7ff;
+  color: #0b2f58;
+  border-color: #d9e3ff;
+}
+
 .header__inner {
   max-width: 1200px;
   margin: 0 auto;
@@ -153,6 +159,7 @@ body.theme-dark .about {
   border: 1px solid #e1e1e1;
   cursor: pointer;
   font-family: inherit;
+  color: #182033;
 }
 
 .icon--only {

@@ -26,6 +26,13 @@ setInterval(() => {
 }, 6000);
 
 const langButtons = document.querySelectorAll('.lang');
+const sectionCardEnMap = {
+  'قسم الهيكل الاسود': 'Black Structure Section',
+  'قسم المساح': 'Surveying Section',
+  'قسم الاصباغ الداخلية': 'Interior Paints Section',
+  'قسم الاصباغ الخارجية والسيجما': 'Exterior Paints & Sigma Section',
+  'قسم العازل': 'Insulation Section'
+};
 const productNameEnMap = {
   'حديد': 'Rebar Steel',
   'اسمنت اسود': 'Black Cement',
@@ -77,6 +84,13 @@ document.querySelectorAll('.product h3').forEach((title) => {
   }
 });
 
+document.querySelectorAll('.grid--cards h3').forEach((title) => {
+  const arName = title.textContent.trim();
+  if (!title.dataset.en && sectionCardEnMap[arName]) {
+    title.dataset.en = sectionCardEnMap[arName];
+  }
+});
+
 function setLang(lang) {
   document.documentElement.lang = lang;
   document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
@@ -101,6 +115,11 @@ function setLang(lang) {
       lang === 'en' ? input.dataset.placeholderEn : input.dataset.placeholderAr
     );
   });
+
+  if (themeToggle) {
+    themeToggle.setAttribute('aria-label', lang === 'en' ? 'Toggle theme' : 'تبديل الوضع');
+    themeToggle.textContent = '🌓';
+  }
 }
 
 langButtons.forEach((btn) => {
@@ -132,6 +151,10 @@ const themeToggle = document.querySelector('.theme-toggle');
 const savedTheme = localStorage.getItem('theme');
 if (savedTheme === 'dark') {
   document.body.classList.add('theme-dark');
+}
+
+if (themeToggle) {
+  themeToggle.textContent = '🌓';
 }
 
 if (themeToggle) {

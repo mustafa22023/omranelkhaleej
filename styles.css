@@ -31,6 +31,7 @@ body {
   background: linear-gradient(180deg, #bfe4e6 0%, #d8f0ef 45%, #f7fbfb 100%);
   color: var(--text);
   line-height: 1.6;
+  overflow-x: hidden;
 }
 
 main {
@@ -567,6 +568,40 @@ body.theme-dark .about {
 @media (max-width: 600px) {
   body {
     padding-bottom: 74px;
+  }
+
+  .nav__inner {
+    padding: 0.55rem 0.6rem;
+    gap: 0.55rem;
+  }
+
+  .nav__links {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.3rem;
+    overflow: visible;
+    white-space: normal;
+    padding-bottom: 0;
+  }
+
+  .nav__links a {
+    border: none;
+    padding: 0.5rem 0.3rem;
+    text-align: center;
+    font-size: 0.95rem;
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: 8px;
+    line-height: 1.25;
+  }
+
+  .nav__lang {
+    justify-content: center;
+    gap: 0.45rem;
+  }
+
+  .lang {
+    padding: 0.35rem 0.75rem;
+    font-size: 0.8rem;
   }
 
   .header__inner {

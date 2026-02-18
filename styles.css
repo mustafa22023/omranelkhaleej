@@ -272,12 +272,21 @@ body.theme-dark .icon {
 }
 
 .slide__content {
-  max-width: 420px;
+  max-width: 560px;
 }
 
 .slide h1 {
   margin: 0 0 0.5rem;
-  font-size: 2.4rem;
+  font-size: 2.25rem;
+  line-height: 1.2;
+  word-break: normal;
+  overflow-wrap: normal;
+  text-wrap: balance;
+}
+
+.slide p {
+  max-width: 520px;
+  line-height: 1.45;
 }
 
 .btn {
@@ -546,10 +555,16 @@ body.theme-dark .icon {
 
   .slide h1 {
     font-size: 1.8rem;
+    line-height: 1.25;
+    text-wrap: pretty;
   }
 
   .slide {
     padding: 1.2rem;
+  }
+
+  .slide__content {
+    max-width: 500px;
   }
 
   .nav__inner {
@@ -635,6 +650,24 @@ body.theme-dark .icon {
 
   .search input {
     padding: 0.35rem 0.5rem;
+  }
+
+  .hero__slider {
+    height: 300px;
+  }
+
+  .slide h1 {
+    font-size: 1.55rem;
+    line-height: 1.3;
+  }
+
+  .slide p {
+    font-size: 1rem;
+    margin-bottom: 0.2rem;
+  }
+
+  .slide__content {
+    max-width: 92%;
   }
 
   .catalog-section .grid--products {

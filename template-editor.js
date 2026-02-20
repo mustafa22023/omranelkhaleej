@@ -1,7 +1,8 @@
 (function () {
-  const STORAGE_KEY = 'imran-template-config-v1';
-  const PUBLISH_SETTINGS_KEY = 'imran-publish-settings-v1';
+  const STORAGE_KEY = 'imran-template-config-v2';
+  const PUBLISH_SETTINGS_KEY = 'imran-publish-settings-v2';
   const PUBLISHED_CONFIG_PATH = 'site-config.json';
+  const isDeveloper = new URLSearchParams(location.search).get('developer') === '1';
 
   const editableTextSelectors = [
     '.logo__title', '.logo__subtitle', '.nav__links a', '.mobile-nav a', '.slide h1', '.slide p', '.slide .btn',
@@ -22,32 +23,26 @@
       brandDark: '#0f4ecf',
       darkBg: '#072c54',
       darkCard: '#0b355f'
+    },
+    structure: {
+      addedSections: [],
+      addedProducts: [],
+      removedSections: [],
+      removedProducts: []
     }
   };
 
   let config = deepClone(initialConfig);
   let textMode = false;
   let imageMode = false;
-
-  const isDeveloper = new URLSearchParams(location.search).get('developer') === '1';
+  let deleteMode = false;
+  let clearImageMode = false;
 
   const hiddenFileInput = document.createElement('input');
   hiddenFileInput.type = 'file';
   hiddenFileInput.accept = 'image/*';
   hiddenFileInput.style.display = 'none';
   document.body.appendChild(hiddenFileInput);
-
-  const allTextNodes = Array.from(document.querySelectorAll(editableTextSelectors.join(','))).filter((el) => !el.closest('.template-editor-panel'));
-  const allImageNodes = Array.from(document.querySelectorAll(editableImageSelectors.join(','))).filter((el) => !el.closest('.template-editor-panel'));
-
-  allTextNodes.forEach((el, i) => {
-    el.dataset.templateTextId = `t${i + 1}`;
-    if (!el.dataset.ar && el.textContent.trim()) el.dataset.ar = el.textContent.trim();
-  });
-
-  allImageNodes.forEach((el, i) => {
-    el.dataset.templateImageId = `i${i + 1}`;
-  });
 
   init();
 
@@ -58,9 +53,18 @@
     config = normalizeConfig({
       texts: { ...(publishedConfig.texts || {}), ...(localConfig.texts || {}) },
       images: { ...(publishedConfig.images || {}), ...(localConfig.images || {}) },
-      colors: { ...initialConfig.colors, ...(publishedConfig.colors || {}), ...(localConfig.colors || {}) }
+      colors: { ...initialConfig.colors, ...(publishedConfig.colors || {}), ...(localConfig.colors || {}) },
+      structure: {
+        addedSections: uniqById([...(publishedConfig.structure?.addedSections || []), ...(localConfig.structure?.addedSections || [])]),
+        addedProducts: uniqById([...(publishedConfig.structure?.addedProducts || []), ...(localConfig.structure?.addedProducts || [])]),
+        removedSections: uniq([...(publishedConfig.structure?.removedSections || []), ...(localConfig.structure?.removedSections || [])]),
+        removedProducts: uniq([...(publishedConfig.structure?.removedProducts || []), ...(localConfig.structure?.removedProducts || [])])
+      }
     });
 
+    assignStableIdsForCurrentDom();
+    applyStructureFromConfig();
+    assignTemplateIds();
     applySavedTexts();
     applySavedImages();
     applySavedColors();
@@ -75,11 +79,29 @@
     return JSON.parse(JSON.stringify(obj));
   }
 
+  function uniq(arr) {
+    return Array.from(new Set(arr));
+  }
+
+  function uniqById(arr) {
+    const map = new Map();
+    arr.forEach((item) => {
+      if (item && item.id) map.set(item.id, item);
+    });
+    return Array.from(map.values());
+  }
+
   function normalizeConfig(maybeConfig) {
     return {
       texts: maybeConfig.texts || {},
       images: maybeConfig.images || {},
-      colors: { ...initialConfig.colors, ...(maybeConfig.colors || {}) }
+      colors: { ...initialConfig.colors, ...(maybeConfig.colors || {}) },
+      structure: {
+        addedSections: maybeConfig.structure?.addedSections || [],
+        addedProducts: maybeConfig.structure?.addedProducts || [],
+        removedSections: maybeConfig.structure?.removedSections || [],
+        removedProducts: maybeConfig.structure?.removedProducts || []
+      }
     };
   }
 
@@ -111,28 +133,143 @@
     return document.documentElement.lang === 'en' ? 'en' : 'ar';
   }
 
+  function assignStableIdsForCurrentDom() {
+    document.querySelectorAll('section.catalog-section').forEach((section) => {
+      if (!section.dataset.templateSectionId) {
+        section.dataset.templateSectionId = section.id || `section-${Math.random().toString(36).slice(2, 7)}`;
+      }
+      const sid = section.dataset.templateSectionId;
+      section.querySelectorAll('.product').forEach((product, i) => {
+        if (!product.dataset.templateProductId) {
+          product.dataset.templateProductId = `${sid}::${i + 1}`;
+        }
+      });
+    });
+  }
+
+  function assignTemplateIds() {
+    const allTextNodes = Array.from(document.querySelectorAll(editableTextSelectors.join(','))).filter((el) => !el.closest('.template-editor-panel'));
+    allTextNodes.forEach((el, i) => {
+      el.dataset.templateTextId = `t${i + 1}`;
+      if (!el.dataset.ar && el.textContent.trim()) el.dataset.ar = el.textContent.trim();
+    });
+
+    const allImageNodes = Array.from(document.querySelectorAll(editableImageSelectors.join(','))).filter((el) => !el.closest('.template-editor-panel'));
+    allImageNodes.forEach((el, i) => {
+      el.dataset.templateImageId = `i${i + 1}`;
+    });
+  }
+
+  function applyStructureFromConfig() {
+    config.structure.removedSections.forEach((sid) => {
+      const section = document.querySelector(`section.catalog-section[data-template-section-id="${sid}"]`) || document.getElementById(sid);
+      if (section) section.remove();
+      document.querySelectorAll(`#store .grid--cards a.card[href="#${sid}"]`).forEach((card) => card.remove());
+      document.querySelectorAll(`footer a[href="#${sid}"]`).forEach((a) => a.closest('li')?.remove());
+    });
+
+    config.structure.removedProducts.forEach((pid) => {
+      document.querySelectorAll(`.product[data-template-product-id="${pid}"]`).forEach((product) => product.remove());
+    });
+
+    config.structure.addedSections.forEach((sectionDef) => {
+      if (!sectionDef?.id) return;
+      if (!document.getElementById(sectionDef.id)) {
+        addSectionToDom(sectionDef);
+      }
+    });
+
+    config.structure.addedProducts.forEach((productDef) => {
+      if (!productDef?.id || !productDef.sectionId) return;
+      const exists = document.querySelector(`.product[data-template-product-id="${productDef.id}"]`);
+      if (!exists) addProductToDom(productDef);
+    });
+
+    assignStableIdsForCurrentDom();
+  }
+
+  function addSectionToDom(sectionDef) {
+    const section = document.createElement('section');
+    section.className = 'section catalog-section';
+    section.id = sectionDef.id;
+    section.dataset.templateSectionId = sectionDef.id;
+    section.innerHTML = `
+      <div class="section-banner">
+        <img src="${sectionDef.banner || ''}" alt="${escapeHtml(sectionDef.titleAr || '')}" />
+      </div>
+      <div class="section__head">
+        <h2 data-en="${escapeHtml(sectionDef.titleEn || sectionDef.titleAr || '')}">${escapeHtml(sectionDef.titleAr || '')}</h2>
+        <a class="section__all" href="#${sectionDef.id}" data-en="View all">عرض الكل</a>
+      </div>
+      <div class="grid grid--products"></div>
+    `;
+
+    const contact = document.getElementById('contact');
+    if (contact) {
+      contact.parentNode.insertBefore(section, contact);
+    } else {
+      document.querySelector('main')?.appendChild(section);
+    }
+
+    addSectionCardToStore(sectionDef);
+  }
+
+  function addSectionCardToStore(sectionDef) {
+    const cardsGrid = document.querySelector('#store .grid--cards');
+    if (!cardsGrid) return;
+    if (cardsGrid.querySelector(`a.card[href="#${sectionDef.id}"]`)) return;
+
+    const card = document.createElement('a');
+    card.className = 'card';
+    card.href = `#${sectionDef.id}`;
+    card.innerHTML = `
+      <div class="card__img" style="--img:url('${sectionDef.cardImage || sectionDef.banner || ''}');"></div>
+      <h3 data-en="${escapeHtml(sectionDef.titleEn || sectionDef.titleAr || '')}">${escapeHtml(sectionDef.titleAr || '')}</h3>
+    `;
+    cardsGrid.appendChild(card);
+  }
+
+  function addProductToDom(productDef) {
+    const section = document.getElementById(productDef.sectionId);
+    const grid = section?.querySelector('.grid--products');
+    if (!grid) return;
+
+    const product = document.createElement('div');
+    product.className = 'product';
+    product.dataset.templateProductId = productDef.id;
+    product.innerHTML = `
+      <div class="product__img" style="--img:url('${productDef.image || ''}');"></div>
+      <h3 data-en="${escapeHtml(productDef.nameEn || productDef.nameAr || '')}">${escapeHtml(productDef.nameAr || '')}</h3>
+      <button data-en="Contact Us">تواصل معنا</button>
+    `;
+
+    grid.appendChild(product);
+  }
+
   function applySavedTexts() {
-    allTextNodes.forEach((el) => {
+    document.querySelectorAll('[data-template-text-id]').forEach((el) => {
       const id = el.dataset.templateTextId;
       const saved = config.texts[id];
       if (!saved) return;
       if (saved.ar) el.dataset.ar = saved.ar;
       if (saved.en) el.dataset.en = saved.en;
-      el.textContent = currentLang() === 'en'
-        ? (saved.en || el.dataset.en || el.textContent)
-        : (saved.ar || el.dataset.ar || el.textContent);
+      el.textContent = currentLang() === 'en' ? (saved.en || el.dataset.en || el.textContent) : (saved.ar || el.dataset.ar || el.textContent);
     });
   }
 
   function setStyleUrl(el, cssVarName, value) {
     const current = el.getAttribute('style') || '';
     const cleaned = current.replace(new RegExp(`${cssVarName}:\\s*url\\('([^']+)'\\)`), '').trim();
+    if (!value) {
+      el.setAttribute('style', cleaned);
+      return;
+    }
     el.setAttribute('style', `${cleaned} ${cssVarName}:url('${value}');`.trim());
   }
 
   function setImageSource(el, src) {
     if (el.matches('img')) {
-      el.setAttribute('src', src);
+      el.setAttribute('src', src || '');
       return;
     }
     if (el.matches('.slide')) {
@@ -143,7 +280,7 @@
   }
 
   function applySavedImages() {
-    allImageNodes.forEach((el) => {
+    document.querySelectorAll('[data-template-image-id]').forEach((el) => {
       const id = el.dataset.templateImageId;
       const saved = config.images[id];
       if (saved) setImageSource(el, saved);
@@ -175,19 +312,24 @@ body.theme-dark {
     styleTag.textContent = cssColorVars(config.colors);
   }
 
+  function defaultPublishSettings() {
+    const owner = location.hostname.endsWith('.github.io') ? location.hostname.split('.')[0] : 'mustafa22023';
+    const repo = location.pathname.split('/').filter(Boolean)[0] || 'omranelkhaleej';
+    return { token: '', owner, repo, branch: 'main' };
+  }
+
   function loadPublishSettings() {
     try {
       const raw = localStorage.getItem(PUBLISH_SETTINGS_KEY);
-      if (!raw) return { endpoint: '' };
-      const parsed = JSON.parse(raw);
-      return { endpoint: parsed.endpoint || '' };
+      if (!raw) return defaultPublishSettings();
+      return { ...defaultPublishSettings(), ...JSON.parse(raw) };
     } catch (_) {
-      return { endpoint: '' };
+      return defaultPublishSettings();
     }
   }
 
   function savePublishSettings(settings) {
-    localStorage.setItem(PUBLISH_SETTINGS_KEY, JSON.stringify({ endpoint: settings.endpoint || '' }));
+    localStorage.setItem(PUBLISH_SETTINGS_KEY, JSON.stringify(settings));
   }
 
   function buildPublishQuickButton() {
@@ -203,7 +345,7 @@ body.theme-dark {
       try {
         quickPublish.disabled = true;
         quickPublish.textContent = 'جاري النشر...';
-        await publishToServer({ endpoint: settings.endpoint, password: settings.password, content: config });
+        await publishToGithub({ ...settings, content: config });
         quickPublish.textContent = 'تم النشر';
         setTimeout(() => {
           quickPublish.textContent = 'نشر للجميع';
@@ -220,12 +362,17 @@ body.theme-dark {
   }
 
   function askPublishSettings(existing) {
-    const endpoint = prompt('Publish API URL:', existing.endpoint || '');
-    if (!endpoint) return null;
-    const password = prompt('Developer password:');
-    if (!password) return null;
-    savePublishSettings({ endpoint: endpoint.trim() });
-    return { endpoint: endpoint.trim(), password };
+    const token = prompt('GitHub Token:', existing.token || '');
+    if (!token) return null;
+    const owner = prompt('GitHub Owner:', existing.owner || '');
+    if (!owner) return null;
+    const repo = prompt('GitHub Repository:', existing.repo || '');
+    if (!repo) return null;
+    const branch = prompt('Branch:', existing.branch || 'main') || 'main';
+
+    const settings = { token: token.trim(), owner: owner.trim(), repo: repo.trim(), branch: branch.trim() };
+    savePublishSettings(settings);
+    return settings;
   }
 
   function buildDeveloperUI() {
@@ -245,6 +392,10 @@ body.theme-dark {
       <div class="template-editor-actions">
         <button type="button" data-action="text-mode">تعديل النصوص</button>
         <button type="button" data-action="image-mode">تبديل الصور</button>
+        <button type="button" data-action="delete-mode">وضع الحذف</button>
+        <button type="button" data-action="clear-image">حذف صورة</button>
+        <button type="button" data-action="add-section">اضافة قسم</button>
+        <button type="button" data-action="add-product">اضافة منتج</button>
         <button type="button" data-action="export">تصدير الاعدادات</button>
         <button type="button" data-action="import">استيراد الاعدادات</button>
         <button type="button" data-action="reset">استعادة الافتراضي</button>
@@ -260,7 +411,7 @@ body.theme-dark {
         <div class="template-editor-field"><label>بطاقات الوضع الغامق</label><input type="color" data-color-key="darkCard"></div>
       </div>
 
-      <p class="template-editor-note">ادوات التعديل تظهر فقط عند فتح الموقع بهذا الرابط: <b>?developer=1</b>.\nزر "نشر للجميع" يعمل عبر Publish API آمن خارج الموقع.</p>
+      <p class="template-editor-note">الادوات تظهر فقط عبر <b>?developer=1</b>.\nوضع الحذف: اضغط على قسم او منتج لحذفه. حذف صورة: اضغط على صورة لمسحها.</p>
     `;
 
     document.body.appendChild(toggle);
@@ -269,6 +420,8 @@ body.theme-dark {
     const closeBtn = panel.querySelector('.template-editor-close');
     const textModeBtn = panel.querySelector('[data-action="text-mode"]');
     const imageModeBtn = panel.querySelector('[data-action="image-mode"]');
+    const deleteModeBtn = panel.querySelector('[data-action="delete-mode"]');
+    const clearImageBtn = panel.querySelector('[data-action="clear-image"]');
 
     toggle.addEventListener('click', () => panel.classList.toggle('is-open'));
     closeBtn.addEventListener('click', () => panel.classList.remove('is-open'));
@@ -281,6 +434,47 @@ body.theme-dark {
         applySavedColors();
         saveLocalConfig();
       });
+    });
+
+    panel.querySelector('[data-action="add-section"]').addEventListener('click', () => {
+      const titleAr = prompt('اسم القسم (عربي):');
+      if (!titleAr) return;
+      const titleEn = prompt('Section name (English):', titleAr) || titleAr;
+      const id = slugify(prompt('معرف الرابط (مثال: new-section):', titleEn) || titleEn);
+      if (!id) return;
+      if (document.getElementById(id)) {
+        alert('هذا المعرف مستخدم بالفعل');
+        return;
+      }
+      const banner = prompt('رابط صورة البنر (اختياري):', '') || '';
+      const cardImage = prompt('رابط صورة بطاقة القسم (اختياري):', banner) || banner;
+
+      const sectionDef = { id, titleAr, titleEn, banner, cardImage };
+      config.structure.addedSections = uniqById([...config.structure.addedSections, sectionDef]);
+      config.structure.removedSections = config.structure.removedSections.filter((x) => x !== id);
+      addSectionToDom(sectionDef);
+      assignTemplateIds();
+      saveLocalConfig();
+    });
+
+    panel.querySelector('[data-action="add-product"]').addEventListener('click', () => {
+      const sectionId = prompt('معرف القسم target section id:');
+      if (!sectionId || !document.getElementById(sectionId)) {
+        alert('القسم غير موجود');
+        return;
+      }
+      const nameAr = prompt('اسم المنتج (عربي):');
+      if (!nameAr) return;
+      const nameEn = prompt('Product name (English):', nameAr) || nameAr;
+      const image = prompt('رابط صورة المنتج (اختياري):', '') || '';
+      const id = `prod-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+
+      const productDef = { id, sectionId, nameAr, nameEn, image };
+      config.structure.addedProducts = uniqById([...config.structure.addedProducts, productDef]);
+      config.structure.removedProducts = config.structure.removedProducts.filter((x) => x !== id);
+      addProductToDom(productDef);
+      assignTemplateIds();
+      saveLocalConfig();
     });
 
     panel.querySelector('[data-action="reset"]').addEventListener('click', () => {
@@ -308,11 +502,7 @@ body.theme-dark {
         reader.onload = () => {
           try {
             const parsed = normalizeConfig(JSON.parse(String(reader.result || '{}')));
-            config = {
-              texts: parsed.texts,
-              images: parsed.images,
-              colors: { ...initialConfig.colors, ...(parsed.colors || {}) }
-            };
+            config = normalizeConfig(parsed);
             saveLocalConfig();
             window.location.reload();
           } catch (_) {
@@ -328,8 +518,7 @@ body.theme-dark {
       textMode = !textMode;
       document.body.classList.toggle('template-text-edit', textMode);
       textModeBtn.textContent = textMode ? 'ايقاف تعديل النصوص' : 'تعديل النصوص';
-
-      allTextNodes.forEach((el) => {
+      document.querySelectorAll('[data-template-text-id]').forEach((el) => {
         el.setAttribute('contenteditable', textMode ? 'true' : 'false');
         if (!textMode) el.blur();
       });
@@ -339,6 +528,16 @@ body.theme-dark {
       imageMode = !imageMode;
       document.body.classList.toggle('template-image-edit', imageMode);
       imageModeBtn.textContent = imageMode ? 'ايقاف تبديل الصور' : 'تبديل الصور';
+    });
+
+    deleteModeBtn.addEventListener('click', () => {
+      deleteMode = !deleteMode;
+      deleteModeBtn.textContent = deleteMode ? 'ايقاف وضع الحذف' : 'وضع الحذف';
+    });
+
+    clearImageBtn.addEventListener('click', () => {
+      clearImageMode = !clearImageMode;
+      clearImageBtn.textContent = clearImageMode ? 'ايقاف حذف صورة' : 'حذف صورة';
     });
 
     document.addEventListener('blur', (event) => {
@@ -361,47 +560,114 @@ body.theme-dark {
     }, true);
 
     document.addEventListener('click', (event) => {
-      if (!imageMode) return;
       const target = event.target;
       if (!(target instanceof Element)) return;
-      const imageTarget = target.closest('.product__img, .card__img, .section-banner img, .logo img, .slide');
-      if (!imageTarget || imageTarget.closest('.template-editor-panel')) return;
 
-      event.preventDefault();
-      event.stopPropagation();
+      if (deleteMode) {
+        const section = target.closest('section.catalog-section');
+        const product = target.closest('.product');
 
-      hiddenFileInput.accept = 'image/*';
-      hiddenFileInput.onchange = () => {
-        const file = hiddenFileInput.files && hiddenFileInput.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = () => {
-          const result = String(reader.result || '');
-          setImageSource(imageTarget, result);
-          const id = imageTarget.dataset.templateImageId;
-          if (id) {
-            config.images[id] = result;
+        if (product) {
+          const pid = product.dataset.templateProductId;
+          if (pid) {
+            config.structure.addedProducts = config.structure.addedProducts.filter((p) => p.id !== pid);
+            config.structure.removedProducts = uniq([...config.structure.removedProducts, pid]);
+            product.remove();
             saveLocalConfig();
+            event.preventDefault();
+            event.stopPropagation();
+            return;
           }
+        }
+
+        if (section && window.confirm('حذف هذا القسم بالكامل؟')) {
+          const sid = section.dataset.templateSectionId || section.id;
+          if (sid) {
+            config.structure.addedSections = config.structure.addedSections.filter((s) => s.id !== sid);
+            config.structure.addedProducts = config.structure.addedProducts.filter((p) => p.sectionId !== sid);
+            config.structure.removedSections = uniq([...config.structure.removedSections, sid]);
+            section.remove();
+            document.querySelectorAll(`#store .grid--cards a.card[href="#${sid}"]`).forEach((card) => card.remove());
+            document.querySelectorAll(`footer a[href="#${sid}"]`).forEach((a) => a.closest('li')?.remove());
+            saveLocalConfig();
+            event.preventDefault();
+            event.stopPropagation();
+          }
+          return;
+        }
+      }
+
+      if (clearImageMode) {
+        const imageTarget = target.closest('.product__img, .card__img, .section-banner img, .logo img, .slide');
+        if (!imageTarget || imageTarget.closest('.template-editor-panel')) return;
+        const imgId = imageTarget.dataset.templateImageId;
+        if (imgId) delete config.images[imgId];
+        setImageSource(imageTarget, '');
+        saveLocalConfig();
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+
+      if (imageMode) {
+        const imageTarget = target.closest('.product__img, .card__img, .section-banner img, .logo img, .slide');
+        if (!imageTarget || imageTarget.closest('.template-editor-panel')) return;
+
+        event.preventDefault();
+        event.stopPropagation();
+
+        hiddenFileInput.accept = 'image/*';
+        hiddenFileInput.onchange = () => {
+          const file = hiddenFileInput.files && hiddenFileInput.files[0];
+          if (!file) return;
+          const reader = new FileReader();
+          reader.onload = () => {
+            const result = String(reader.result || '');
+            setImageSource(imageTarget, result);
+            const id = imageTarget.dataset.templateImageId;
+            if (id) {
+              config.images[id] = result;
+              saveLocalConfig();
+            }
+          };
+          reader.readAsDataURL(file);
         };
-        reader.readAsDataURL(file);
-      };
-      hiddenFileInput.click();
+        hiddenFileInput.click();
+      }
     }, true);
 
     document.addEventListener('langchange', applySavedTexts);
   }
 
-  async function publishToServer({ endpoint, password, content }) {
-    const res = await fetch(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password, config: content })
-    });
+  async function publishToGithub({ token, owner, repo, branch, content }) {
+    const api = `https://api.github.com/repos/${owner}/${repo}/contents/${PUBLISHED_CONFIG_PATH}`;
+    const headers = {
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/vnd.github+json',
+      'Content-Type': 'application/json'
+    };
 
-    if (!res.ok) {
-      const body = await safeJson(res);
-      throw new Error(body.error || 'Publish API request failed');
+    let sha = null;
+    const getRes = await fetch(`${api}?ref=${encodeURIComponent(branch)}`, { headers });
+    if (getRes.ok) {
+      const body = await getRes.json();
+      sha = body.sha;
+    } else if (getRes.status !== 404) {
+      const errBody = await safeJson(getRes);
+      throw new Error(errBody.message || 'تعذر قراءة ملف الاعدادات من GitHub');
+    }
+
+    const payload = {
+      message: 'Update site config from developer tools',
+      content: btoa(unescape(encodeURIComponent(JSON.stringify(content, null, 2)))),
+      branch
+    };
+    if (sha) payload.sha = sha;
+
+    const putRes = await fetch(api, { method: 'PUT', headers, body: JSON.stringify(payload) });
+    if (!putRes.ok) {
+      const errBody = await safeJson(putRes);
+      throw new Error(errBody.message || 'فشل رفع ملف الاعدادات');
     }
   }
 
@@ -411,5 +677,23 @@ body.theme-dark {
     } catch (_) {
       return {};
     }
+  }
+
+  function slugify(value) {
+    return String(value || '')
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9\u0600-\u06FF\s-]/g, '')
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-');
+  }
+
+  function escapeHtml(str) {
+    return String(str || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
   }
 })();

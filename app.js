@@ -136,17 +136,18 @@ if (loginForm) {
 }
 
 const whatsappPhone = '96566871081';
-document.querySelectorAll('.product button').forEach((btn) => {
-  btn.addEventListener('click', (event) => {
-    event.preventDefault();
-    const card = btn.closest('.product');
-    const title = card ? card.querySelector('h3')?.textContent?.trim() : '';
-    const prefix = document.documentElement.lang === 'en' ? 'I would like to order: ' : 'ارغب بطلب: ';
-    const fallback = document.documentElement.lang === 'en' ? 'I want to place an order' : 'ارغب بالطلب';
-    const msg = title ? `${prefix}${title}` : fallback;
-    const url = `https://api.whatsapp.com/send?phone=${whatsappPhone}&text=${encodeURIComponent(msg)}`;
-    window.open(url, '_blank');
-  });
+document.addEventListener('click', (event) => {
+  const btn = event.target.closest('.product button');
+  if (!btn) return;
+
+  event.preventDefault();
+  const card = btn.closest('.product');
+  const title = card ? card.querySelector('h3')?.textContent?.trim() : '';
+  const prefix = document.documentElement.lang === 'en' ? 'I would like to order: ' : 'ارغب بطلب: ';
+  const fallback = document.documentElement.lang === 'en' ? 'I want to place an order' : 'ارغب بالطلب';
+  const msg = title ? `${prefix}${title}` : fallback;
+  const url = `https://api.whatsapp.com/send?phone=${whatsappPhone}&text=${encodeURIComponent(msg)}`;
+  window.open(url, '_blank');
 });
 
 const themeToggle = document.querySelector('.theme-toggle');

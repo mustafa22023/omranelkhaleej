@@ -415,6 +415,7 @@ body.theme-dark {
         <button type="button" data-action="delete-mode">وضع الحذف</button>
         <button type="button" data-action="clear-image">حذف صورة</button>
         <button type="button" data-action="save-all">حفظ GitHub + ملف</button>
+        <button type="button" data-action="restore-backup">استرجاع اخر نسخة</button>
         <button type="button" data-action="export">تصدير الاعدادات</button>
         <button type="button" data-action="import">استيراد الاعدادات</button>
         <button type="button" data-action="reset">استعادة الافتراضي</button>
@@ -532,6 +533,21 @@ body.theme-dark {
         alert('تم الحفظ على GitHub وتم حفظ ملف site-config.json محليًا.');
       } catch (err) {
         alert(`فشل الحفظ: ${formatPublishError(err)}`);
+      }
+    });
+
+    panel.querySelector('[data-action="restore-backup"]').addEventListener('click', () => {
+      const raw = localStorage.getItem(STORAGE_BACKUP_KEY);
+      if (!raw) {
+        alert('لا توجد نسخة احتياطية محلية.');
+        return;
+      }
+      try {
+        config = normalizeConfig(JSON.parse(raw));
+        saveLocalConfig();
+        window.location.reload();
+      } catch (_) {
+        alert('النسخة الاحتياطية غير صالحة.');
       }
     });
 

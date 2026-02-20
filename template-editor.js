@@ -355,7 +355,7 @@ body.theme-dark {
           quickPublish.disabled = false;
         }, 1500);
       } catch (err) {
-        alert(`فشل النشر: ${err.message}`);
+        alert(`فشل النشر: ${formatPublishError(err)}`);
         quickPublish.textContent = 'نشر للجميع';
         quickPublish.disabled = false;
       }
@@ -494,7 +494,7 @@ body.theme-dark {
         await saveConfigToProjectFile(config);
         alert('تم الحفظ على GitHub وتم حفظ ملف site-config.json محليًا.');
       } catch (err) {
-        alert(`فشل الحفظ: ${err.message}`);
+        alert(`فشل الحفظ: ${formatPublishError(err)}`);
       }
     });
 
@@ -727,7 +727,13 @@ body.theme-dark {
       sha = body.sha;
     } else if (getRes.status !== 404) {
       const errBody = await safeJson(getRes);
-      throw new Error(errBody.message || 'تعذر قراءة ملف الاعدادات من GitHub');
+      throw buildPublishError(
+        getRes.status,
+        errBody.message || 'تعذر قراءة ملف الاعدادات من GitHub',
+        owner,
+        repo,
+        branch
+      );
     }
 
     const payload = {
@@ -740,8 +746,44 @@ body.theme-dark {
     const putRes = await fetch(api, { method: 'PUT', headers, body: JSON.stringify(payload) });
     if (!putRes.ok) {
       const errBody = await safeJson(putRes);
-      throw new Error(errBody.message || 'فشل رفع ملف الاعدادات');
+      throw buildPublishError(
+        putRes.status,
+        errBody.message || 'فشل رفع ملف الاعدادات',
+        owner,
+        repo,
+        branch
+      );
     }
+  }
+
+  function buildPublishError(status, message, owner, repo, branch) {
+    const err = new Error(message || 'Publish failed');
+    err.status = status;
+    err.owner = owner;
+    err.repo = repo;
+    err.branch = branch;
+    return err;
+  }
+
+  function formatPublishError(err) {
+    const status = err && typeof err.status === 'number' ? err.status : null;
+    const base = err && err.message ? err.message : 'خطأ غير معروف';
+    if (status === 401) {
+      return `${base}\nالسبب: التوكن غير صحيح أو منتهي.\nالحل: أنشئ Token جديد بصلاحية Contents: Read and Write.`;
+    }
+    if (status === 403) {
+      return `${base}\nالسبب: لا توجد صلاحيات كافية أو تم حظر الطلب.\nالحل: تأكد من صلاحيات التوكن على المستودع.`;
+    }
+    if (status === 404) {
+      return `${base}\nالسبب: Owner/Repository/Branch غير صحيح.\nالقيم الحالية: ${err.owner}/${err.repo} @ ${err.branch}`;
+    }
+    if (status === 422) {
+      return `${base}\nالسبب: غالبا اسم الفرع غير موجود أو بيانات الملف غير صالحة.\nالحل: تأكد أن الفرع هو main.`;
+    }
+    if (status) {
+      return `${base}\nHTTP Status: ${status}`;
+    }
+    return base;
   }
 
   async function saveConfigToProjectFile(content) {

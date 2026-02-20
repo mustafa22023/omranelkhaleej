@@ -1,6 +1,6 @@
 (function () {
   const STORAGE_KEY = 'imran-template-config-v1';
-  const DEV_CREDENTIALS_KEY = 'imran-dev-credentials-v1';
+  const PUBLISH_SETTINGS_KEY = 'imran-publish-settings-v1';
   const PUBLISHED_CONFIG_PATH = 'site-config.json';
 
   const editableTextSelectors = [
@@ -124,13 +124,6 @@
     });
   }
 
-  function getStyleUrl(el, cssVarName) {
-    const style = el.getAttribute('style') || '';
-    const rgx = new RegExp(`${cssVarName}:\\s*url\\('([^']+)'\\)`);
-    const found = style.match(rgx);
-    return found ? found[1] : '';
-  }
-
   function setStyleUrl(el, cssVarName, value) {
     const current = el.getAttribute('style') || '';
     const cleaned = current.replace(new RegExp(`${cssVarName}:\\s*url\\('([^']+)'\\)`), '').trim();
@@ -182,24 +175,19 @@ body.theme-dark {
     styleTag.textContent = cssColorVars(config.colors);
   }
 
-  function defaultCredentials() {
-    const hostOwner = location.hostname.endsWith('.github.io') ? location.hostname.split('.')[0] : 'mustafa22023';
-    const pathRepo = location.pathname.split('/').filter(Boolean)[0] || 'omranelkhaleej';
-    return { token: '', owner: hostOwner, repo: pathRepo, branch: 'main' };
-  }
-
-  function loadCredentials() {
+  function loadPublishSettings() {
     try {
-      const raw = localStorage.getItem(DEV_CREDENTIALS_KEY);
-      if (!raw) return defaultCredentials();
-      return { ...defaultCredentials(), ...JSON.parse(raw) };
+      const raw = localStorage.getItem(PUBLISH_SETTINGS_KEY);
+      if (!raw) return { endpoint: '' };
+      const parsed = JSON.parse(raw);
+      return { endpoint: parsed.endpoint || '' };
     } catch (_) {
-      return defaultCredentials();
+      return { endpoint: '' };
     }
   }
 
-  function saveCredentials(creds) {
-    localStorage.setItem(DEV_CREDENTIALS_KEY, JSON.stringify(creds));
+  function savePublishSettings(settings) {
+    localStorage.setItem(PUBLISH_SETTINGS_KEY, JSON.stringify({ endpoint: settings.endpoint || '' }));
   }
 
   function buildPublishQuickButton() {
@@ -209,13 +197,13 @@ body.theme-dark {
     quickPublish.textContent = 'نشر للجميع';
 
     quickPublish.addEventListener('click', async () => {
-      const creds = askCredentials(loadCredentials());
-      if (!creds) return;
+      const settings = askPublishSettings(loadPublishSettings());
+      if (!settings) return;
 
       try {
         quickPublish.disabled = true;
         quickPublish.textContent = 'جاري النشر...';
-        await publishToGithub({ ...creds, content: config });
+        await publishToServer({ endpoint: settings.endpoint, password: settings.password, content: config });
         quickPublish.textContent = 'تم النشر';
         setTimeout(() => {
           quickPublish.textContent = 'نشر للجميع';
@@ -231,18 +219,13 @@ body.theme-dark {
     document.body.appendChild(quickPublish);
   }
 
-  function askCredentials(existing) {
-    const token = prompt('GitHub Token (PAT):', existing.token || '');
-    if (!token) return null;
-    const owner = prompt('GitHub Owner:', existing.owner || '');
-    if (!owner) return null;
-    const repo = prompt('GitHub Repository:', existing.repo || '');
-    if (!repo) return null;
-    const branch = prompt('Branch:', existing.branch || 'main') || 'main';
-
-    const creds = { token: token.trim(), owner: owner.trim(), repo: repo.trim(), branch: branch.trim() };
-    saveCredentials(creds);
-    return creds;
+  function askPublishSettings(existing) {
+    const endpoint = prompt('Publish API URL:', existing.endpoint || '');
+    if (!endpoint) return null;
+    const password = prompt('Developer password:');
+    if (!password) return null;
+    savePublishSettings({ endpoint: endpoint.trim() });
+    return { endpoint: endpoint.trim(), password };
   }
 
   function buildDeveloperUI() {
@@ -277,7 +260,7 @@ body.theme-dark {
         <div class="template-editor-field"><label>بطاقات الوضع الغامق</label><input type="color" data-color-key="darkCard"></div>
       </div>
 
-      <p class="template-editor-note">هذه الادوات تظهر فقط عند فتح الموقع بهذا الرابط: <b>?developer=1</b> . زر النشر للجميع منفصل خارج اللوحة.</p>
+      <p class="template-editor-note">ادوات التعديل تظهر فقط عند فتح الموقع بهذا الرابط: <b>?developer=1</b>.\nزر "نشر للجميع" يعمل عبر Publish API آمن خارج الموقع.</p>
     `;
 
     document.body.appendChild(toggle);
@@ -409,46 +392,17 @@ body.theme-dark {
     document.addEventListener('langchange', applySavedTexts);
   }
 
-  async function publishToGithub({ token, owner, repo, branch, content }) {
-    const api = `https://api.github.com/repos/${owner}/${repo}/contents/${PUBLISHED_CONFIG_PATH}`;
-    const headers = {
-      Authorization: `Bearer ${token}`,
-      Accept: 'application/vnd.github+json',
-      'Content-Type': 'application/json'
-    };
-
-    let sha = null;
-    const getRes = await fetch(`${api}?ref=${encodeURIComponent(branch)}`, { headers });
-    if (getRes.ok) {
-      const body = await getRes.json();
-      sha = body.sha;
-    } else if (getRes.status !== 404) {
-      const errBody = await safeJson(getRes);
-      throw new Error(errBody.message || 'تعذر قراءة ملف الاعدادات من GitHub');
-    }
-
-    const payload = {
-      message: 'Update site config from developer tools',
-      content: b64EncodeUnicode(JSON.stringify(content, null, 2)),
-      branch
-    };
-
-    if (sha) payload.sha = sha;
-
-    const putRes = await fetch(api, {
-      method: 'PUT',
-      headers,
-      body: JSON.stringify(payload)
+  async function publishToServer({ endpoint, password, content }) {
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password, config: content })
     });
 
-    if (!putRes.ok) {
-      const errBody = await safeJson(putRes);
-      throw new Error(errBody.message || 'فشل رفع ملف الاعدادات');
+    if (!res.ok) {
+      const body = await safeJson(res);
+      throw new Error(body.error || 'Publish API request failed');
     }
-  }
-
-  function b64EncodeUnicode(str) {
-    return btoa(unescape(encodeURIComponent(str)));
   }
 
   async function safeJson(res) {

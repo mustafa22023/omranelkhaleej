@@ -1,0 +1,6 @@
+name = "imran-publish-api"
+main = "worker.js"
+compatibility_date = "2026-02-20"
+
+[observability]
+enabled = true

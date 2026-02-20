@@ -1,5 +1,7 @@
 (function () {
   const STORAGE_KEY = 'imran-template-config-v2';
+  const LEGACY_STORAGE_KEYS = ['imran-template-config-v1', 'imran-template-config-v0'];
+  const STORAGE_BACKUP_KEY = 'imran-template-config-backup';
   const PUBLISH_SETTINGS_KEY = 'imran-publish-settings-v2';
   const PUBLISHED_CONFIG_PATH = 'site-config.json';
   const isDeveloper = new URLSearchParams(location.search).get('developer') === '1';
@@ -107,9 +109,31 @@
 
   function loadLocalConfig() {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return deepClone(initialConfig);
-      return normalizeConfig(JSON.parse(raw));
+      const keys = [STORAGE_KEY, ...LEGACY_STORAGE_KEYS, STORAGE_BACKUP_KEY];
+      let merged = deepClone(initialConfig);
+      let foundAny = false;
+
+      keys.forEach((key) => {
+        const raw = localStorage.getItem(key);
+        if (!raw) return;
+        try {
+          const parsed = normalizeConfig(JSON.parse(raw));
+          merged = normalizeConfig({
+            texts: { ...(merged.texts || {}), ...(parsed.texts || {}) },
+            images: { ...(merged.images || {}), ...(parsed.images || {}) },
+            colors: { ...(merged.colors || {}), ...(parsed.colors || {}) },
+            structure: {
+              addedSections: uniqById([...(merged.structure?.addedSections || []), ...(parsed.structure?.addedSections || [])]),
+              addedProducts: uniqById([...(merged.structure?.addedProducts || []), ...(parsed.structure?.addedProducts || [])]),
+              removedSections: uniq([...(merged.structure?.removedSections || []), ...(parsed.structure?.removedSections || [])]),
+              removedProducts: uniq([...(merged.structure?.removedProducts || []), ...(parsed.structure?.removedProducts || [])])
+            }
+          });
+          foundAny = true;
+        } catch (_) {}
+      });
+
+      return foundAny ? merged : deepClone(initialConfig);
     } catch (_) {
       return deepClone(initialConfig);
     }
@@ -126,7 +150,9 @@
   }
 
   function saveLocalConfig() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+    const payload = JSON.stringify(config);
+    localStorage.setItem(STORAGE_KEY, payload);
+    localStorage.setItem(STORAGE_BACKUP_KEY, payload);
   }
 
   function currentLang() {

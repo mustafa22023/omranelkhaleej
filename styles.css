@@ -734,6 +734,21 @@ body.theme-dark .icon {
   cursor: pointer;
 }
 
+.template-publish-toggle {
+  position: fixed;
+  right: 18px;
+  bottom: 72px;
+  z-index: 9999;
+  border: 0;
+  border-radius: 999px;
+  padding: 10px 16px;
+  font-size: 0.88rem;
+  color: #fff;
+  background: #0a8740;
+  box-shadow: var(--shadow);
+  cursor: pointer;
+}
+
 .template-editor-panel {
   position: fixed;
   top: 0;

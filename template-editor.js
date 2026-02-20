@@ -1,37 +1,16 @@
 (function () {
   const STORAGE_KEY = 'imran-template-config-v1';
+  const DEV_CREDENTIALS_KEY = 'imran-dev-credentials-v1';
+  const PUBLISHED_CONFIG_PATH = 'site-config.json';
+
   const editableTextSelectors = [
-    '.logo__title',
-    '.logo__subtitle',
-    '.nav__links a',
-    '.mobile-nav a',
-    '.slide h1',
-    '.slide p',
-    '.slide .btn',
-    '.section__head h2',
-    '.section__all',
-    '.grid--cards h3',
-    '.product h3',
-    '.product button',
-    '.contact__card h3',
-    '.contact__card p',
-    '.contact__card .btn',
-    '.login__hint',
-    '.about',
-    '.footer h3',
-    '.footer h4',
-    '.footer p',
-    '.footer li a',
-    '.footer__bottom'
+    '.logo__title', '.logo__subtitle', '.nav__links a', '.mobile-nav a', '.slide h1', '.slide p', '.slide .btn',
+    '.section__head h2', '.section__all', '.grid--cards h3', '.product h3', '.product button',
+    '.contact__card h3', '.contact__card p', '.contact__card .btn', '.login__hint', '.about',
+    '.footer h3', '.footer h4', '.footer p', '.footer li a', '.footer__bottom'
   ];
 
-  const editableImageSelectors = [
-    '.logo img',
-    '.slide',
-    '.card__img',
-    '.section-banner img',
-    '.product__img'
-  ];
+  const editableImageSelectors = ['.logo img', '.slide', '.card__img', '.section-banner img', '.product__img'];
 
   const initialConfig = {
     texts: {},
@@ -46,55 +25,85 @@
     }
   };
 
-  let config = loadConfig();
+  let config = deepClone(initialConfig);
   let textMode = false;
   let imageMode = false;
+
+  const isDeveloper = new URLSearchParams(location.search).get('developer') === '1';
+
   const hiddenFileInput = document.createElement('input');
   hiddenFileInput.type = 'file';
   hiddenFileInput.accept = 'image/*';
   hiddenFileInput.style.display = 'none';
   document.body.appendChild(hiddenFileInput);
 
-  const allTextNodes = Array.from(
-    document.querySelectorAll(editableTextSelectors.join(','))
-  ).filter((el) => !el.closest('.template-editor-panel'));
-
-  const allImageNodes = Array.from(
-    document.querySelectorAll(editableImageSelectors.join(','))
-  ).filter((el) => !el.closest('.template-editor-panel'));
+  const allTextNodes = Array.from(document.querySelectorAll(editableTextSelectors.join(','))).filter((el) => !el.closest('.template-editor-panel'));
+  const allImageNodes = Array.from(document.querySelectorAll(editableImageSelectors.join(','))).filter((el) => !el.closest('.template-editor-panel'));
 
   allTextNodes.forEach((el, i) => {
     el.dataset.templateTextId = `t${i + 1}`;
-    if (!el.dataset.ar && el.textContent.trim()) {
-      el.dataset.ar = el.textContent.trim();
-    }
+    if (!el.dataset.ar && el.textContent.trim()) el.dataset.ar = el.textContent.trim();
   });
 
   allImageNodes.forEach((el, i) => {
     el.dataset.templateImageId = `i${i + 1}`;
   });
 
-  applySavedTexts();
-  applySavedImages();
-  applySavedColors();
-  buildEditorUI();
+  init();
 
-  function loadConfig() {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return JSON.parse(JSON.stringify(initialConfig));
-      const parsed = JSON.parse(raw);
-      return {
-        texts: parsed.texts || {},
-        images: parsed.images || {},
-        colors: { ...initialConfig.colors, ...(parsed.colors || {}) }
-      };
-    } catch (_) {
-      return JSON.parse(JSON.stringify(initialConfig));
+  async function init() {
+    const localConfig = loadLocalConfig();
+    const publishedConfig = await loadPublishedConfig();
+
+    config = normalizeConfig({
+      texts: { ...(publishedConfig.texts || {}), ...(localConfig.texts || {}) },
+      images: { ...(publishedConfig.images || {}), ...(localConfig.images || {}) },
+      colors: { ...initialConfig.colors, ...(publishedConfig.colors || {}), ...(localConfig.colors || {}) }
+    });
+
+    applySavedTexts();
+    applySavedImages();
+    applySavedColors();
+
+    if (isDeveloper) {
+      buildDeveloperUI();
+      buildPublishQuickButton();
     }
   }
 
-  function saveConfig() {
+  function deepClone(obj) {
+    return JSON.parse(JSON.stringify(obj));
+  }
+
+  function normalizeConfig(maybeConfig) {
+    return {
+      texts: maybeConfig.texts || {},
+      images: maybeConfig.images || {},
+      colors: { ...initialConfig.colors, ...(maybeConfig.colors || {}) }
+    };
+  }
+
+  function loadLocalConfig() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return deepClone(initialConfig);
+      return normalizeConfig(JSON.parse(raw));
+    } catch (_) {
+      return deepClone(initialConfig);
+    }
+  }
+
+  async function loadPublishedConfig() {
+    try {
+      const res = await fetch(`${PUBLISHED_CONFIG_PATH}?t=${Date.now()}`, { cache: 'no-store' });
+      if (!res.ok) return {};
+      return normalizeConfig(await res.json());
+    } catch (_) {
+      return {};
+    }
+  }
+
+  function saveLocalConfig() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
   }
 
@@ -109,7 +118,9 @@
       if (!saved) return;
       if (saved.ar) el.dataset.ar = saved.ar;
       if (saved.en) el.dataset.en = saved.en;
-      el.textContent = currentLang() === 'en' ? (saved.en || el.dataset.en || el.textContent) : (saved.ar || el.dataset.ar || el.textContent);
+      el.textContent = currentLang() === 'en'
+        ? (saved.en || el.dataset.en || el.textContent)
+        : (saved.ar || el.dataset.ar || el.textContent);
     });
   }
 
@@ -122,14 +133,8 @@
 
   function setStyleUrl(el, cssVarName, value) {
     const current = el.getAttribute('style') || '';
-    const next = current.replace(new RegExp(`${cssVarName}:\\s*url\\('([^']+)'\\)`), '').trim();
-    el.setAttribute('style', `${next} ${cssVarName}:url('${value}');`.trim());
-  }
-
-  function getImageSource(el) {
-    if (el.matches('img')) return el.getAttribute('src') || '';
-    if (el.matches('.slide')) return getStyleUrl(el, '--bg');
-    return getStyleUrl(el, '--img');
+    const cleaned = current.replace(new RegExp(`${cssVarName}:\\s*url\\('([^']+)'\\)`), '').trim();
+    el.setAttribute('style', `${cleaned} ${cssVarName}:url('${value}');`.trim());
   }
 
   function setImageSource(el, src) {
@@ -148,9 +153,7 @@
     allImageNodes.forEach((el) => {
       const id = el.dataset.templateImageId;
       const saved = config.images[id];
-      if (saved) {
-        setImageSource(el, saved);
-      }
+      if (saved) setImageSource(el, saved);
     });
   }
 
@@ -179,19 +182,83 @@ body.theme-dark {
     styleTag.textContent = cssColorVars(config.colors);
   }
 
-  function buildEditorUI() {
+  function defaultCredentials() {
+    const hostOwner = location.hostname.endsWith('.github.io') ? location.hostname.split('.')[0] : 'mustafa22023';
+    const pathRepo = location.pathname.split('/').filter(Boolean)[0] || 'omranelkhaleej';
+    return { token: '', owner: hostOwner, repo: pathRepo, branch: 'main' };
+  }
+
+  function loadCredentials() {
+    try {
+      const raw = localStorage.getItem(DEV_CREDENTIALS_KEY);
+      if (!raw) return defaultCredentials();
+      return { ...defaultCredentials(), ...JSON.parse(raw) };
+    } catch (_) {
+      return defaultCredentials();
+    }
+  }
+
+  function saveCredentials(creds) {
+    localStorage.setItem(DEV_CREDENTIALS_KEY, JSON.stringify(creds));
+  }
+
+  function buildPublishQuickButton() {
+    const quickPublish = document.createElement('button');
+    quickPublish.type = 'button';
+    quickPublish.className = 'template-publish-toggle';
+    quickPublish.textContent = 'نشر للجميع';
+
+    quickPublish.addEventListener('click', async () => {
+      const creds = askCredentials(loadCredentials());
+      if (!creds) return;
+
+      try {
+        quickPublish.disabled = true;
+        quickPublish.textContent = 'جاري النشر...';
+        await publishToGithub({ ...creds, content: config });
+        quickPublish.textContent = 'تم النشر';
+        setTimeout(() => {
+          quickPublish.textContent = 'نشر للجميع';
+          quickPublish.disabled = false;
+        }, 1500);
+      } catch (err) {
+        alert(`فشل النشر: ${err.message}`);
+        quickPublish.textContent = 'نشر للجميع';
+        quickPublish.disabled = false;
+      }
+    });
+
+    document.body.appendChild(quickPublish);
+  }
+
+  function askCredentials(existing) {
+    const token = prompt('GitHub Token (PAT):', existing.token || '');
+    if (!token) return null;
+    const owner = prompt('GitHub Owner:', existing.owner || '');
+    if (!owner) return null;
+    const repo = prompt('GitHub Repository:', existing.repo || '');
+    if (!repo) return null;
+    const branch = prompt('Branch:', existing.branch || 'main') || 'main';
+
+    const creds = { token: token.trim(), owner: owner.trim(), repo: repo.trim(), branch: branch.trim() };
+    saveCredentials(creds);
+    return creds;
+  }
+
+  function buildDeveloperUI() {
     const toggle = document.createElement('button');
     toggle.className = 'template-editor-toggle';
     toggle.type = 'button';
-    toggle.textContent = 'تعديل القالب';
+    toggle.textContent = 'ادوات المطور';
 
     const panel = document.createElement('aside');
     panel.className = 'template-editor-panel';
     panel.innerHTML = `
       <div class="template-editor-head">
-        <h3>لوحة تعديل القالب</h3>
+        <h3>ادوات المطور</h3>
         <button class="template-editor-close" type="button">اغلاق</button>
       </div>
+
       <div class="template-editor-actions">
         <button type="button" data-action="text-mode">تعديل النصوص</button>
         <button type="button" data-action="image-mode">تبديل الصور</button>
@@ -199,6 +266,7 @@ body.theme-dark {
         <button type="button" data-action="import">استيراد الاعدادات</button>
         <button type="button" data-action="reset">استعادة الافتراضي</button>
       </div>
+
       <h4>الالوان</h4>
       <div class="template-editor-grid">
         <div class="template-editor-field"><label>خلفية فاتحة</label><input type="color" data-color-key="lightBg"></div>
@@ -208,7 +276,8 @@ body.theme-dark {
         <div class="template-editor-field"><label>خلفية الوضع الغامق</label><input type="color" data-color-key="darkBg"></div>
         <div class="template-editor-field"><label>بطاقات الوضع الغامق</label><input type="color" data-color-key="darkCard"></div>
       </div>
-      <p class="template-editor-note">تعديل النصوص: فعّل الزر ثم اضغط على اي نص داخل الموقع وعدل مباشرة.\nتبديل الصور: فعّل الزر ثم اضغط على الصورة نفسها واختر صورة من جهازك.</p>
+
+      <p class="template-editor-note">هذه الادوات تظهر فقط عند فتح الموقع بهذا الرابط: <b>?developer=1</b> . زر النشر للجميع منفصل خارج اللوحة.</p>
     `;
 
     document.body.appendChild(toggle);
@@ -227,7 +296,7 @@ body.theme-dark {
       input.addEventListener('input', () => {
         config.colors[key] = input.value;
         applySavedColors();
-        saveConfig();
+        saveLocalConfig();
       });
     });
 
@@ -255,13 +324,13 @@ body.theme-dark {
         const reader = new FileReader();
         reader.onload = () => {
           try {
-            const parsed = JSON.parse(String(reader.result || '{}'));
+            const parsed = normalizeConfig(JSON.parse(String(reader.result || '{}')));
             config = {
-              texts: parsed.texts || {},
-              images: parsed.images || {},
+              texts: parsed.texts,
+              images: parsed.images,
               colors: { ...initialConfig.colors, ...(parsed.colors || {}) }
             };
-            saveConfig();
+            saveLocalConfig();
             window.location.reload();
           } catch (_) {
             alert('ملف الاعدادات غير صحيح');
@@ -305,7 +374,7 @@ body.theme-dark {
         el.dataset.ar = value;
       }
       config.texts[id] = item;
-      saveConfig();
+      saveLocalConfig();
     }, true);
 
     document.addEventListener('click', (event) => {
@@ -329,7 +398,7 @@ body.theme-dark {
           const id = imageTarget.dataset.templateImageId;
           if (id) {
             config.images[id] = result;
-            saveConfig();
+            saveLocalConfig();
           }
         };
         reader.readAsDataURL(file);
@@ -338,5 +407,55 @@ body.theme-dark {
     }, true);
 
     document.addEventListener('langchange', applySavedTexts);
+  }
+
+  async function publishToGithub({ token, owner, repo, branch, content }) {
+    const api = `https://api.github.com/repos/${owner}/${repo}/contents/${PUBLISHED_CONFIG_PATH}`;
+    const headers = {
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/vnd.github+json',
+      'Content-Type': 'application/json'
+    };
+
+    let sha = null;
+    const getRes = await fetch(`${api}?ref=${encodeURIComponent(branch)}`, { headers });
+    if (getRes.ok) {
+      const body = await getRes.json();
+      sha = body.sha;
+    } else if (getRes.status !== 404) {
+      const errBody = await safeJson(getRes);
+      throw new Error(errBody.message || 'تعذر قراءة ملف الاعدادات من GitHub');
+    }
+
+    const payload = {
+      message: 'Update site config from developer tools',
+      content: b64EncodeUnicode(JSON.stringify(content, null, 2)),
+      branch
+    };
+
+    if (sha) payload.sha = sha;
+
+    const putRes = await fetch(api, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify(payload)
+    });
+
+    if (!putRes.ok) {
+      const errBody = await safeJson(putRes);
+      throw new Error(errBody.message || 'فشل رفع ملف الاعدادات');
+    }
+  }
+
+  function b64EncodeUnicode(str) {
+    return btoa(unescape(encodeURIComponent(str)));
+  }
+
+  async function safeJson(res) {
+    try {
+      return await res.json();
+    } catch (_) {
+      return {};
+    }
   }
 })();

@@ -120,6 +120,8 @@ function setLang(lang) {
     themeToggle.setAttribute('aria-label', lang === 'en' ? 'Toggle theme' : 'تبديل الوضع');
     themeToggle.textContent = '🌓';
   }
+
+  document.dispatchEvent(new CustomEvent('langchange', { detail: { lang } }));
 }
 
 langButtons.forEach((btn) => {

@@ -718,3 +718,126 @@ body.theme-dark .icon {
     border-left: none;
   }
 }
+
+.template-editor-toggle {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 9999;
+  border: 0;
+  border-radius: 999px;
+  padding: 12px 18px;
+  font-size: 0.95rem;
+  color: #fff;
+  background: var(--brand-gradient);
+  box-shadow: var(--shadow);
+  cursor: pointer;
+}
+
+.template-editor-panel {
+  position: fixed;
+  top: 0;
+  right: -390px;
+  width: min(390px, 92vw);
+  height: 100dvh;
+  z-index: 10000;
+  background: #fff;
+  color: #111;
+  box-shadow: -6px 0 32px rgba(0, 0, 0, 0.22);
+  transition: right 0.22s ease;
+  overflow: auto;
+  padding: 16px;
+  direction: rtl;
+}
+
+.template-editor-panel.is-open {
+  right: 0;
+}
+
+.template-editor-panel * {
+  box-sizing: border-box;
+}
+
+.template-editor-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  gap: 8px;
+}
+
+.template-editor-head h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.template-editor-close {
+  border: 0;
+  border-radius: 10px;
+  background: #efefef;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.template-editor-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.template-editor-actions button {
+  border: 1px solid #ddd;
+  background: #f8f8f8;
+  border-radius: 10px;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.template-editor-panel h4 {
+  margin: 14px 0 8px;
+  font-size: 0.95rem;
+}
+
+.template-editor-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.template-editor-field label {
+  display: block;
+  font-size: 0.8rem;
+  color: #666;
+  margin-bottom: 4px;
+}
+
+.template-editor-field input {
+  width: 100%;
+  border: 1px solid #d6d6d6;
+  border-radius: 10px;
+  padding: 8px;
+  font: inherit;
+}
+
+body.template-text-edit [data-template-text-id] {
+  outline: 2px dashed rgba(30, 102, 245, 0.7);
+  outline-offset: 2px;
+  cursor: text;
+}
+
+body.template-image-edit .product__img,
+body.template-image-edit .card__img,
+body.template-image-edit .section-banner img,
+body.template-image-edit .logo img,
+body.template-image-edit .slide {
+  outline: 2px dashed rgba(30, 102, 245, 0.7);
+  outline-offset: 2px;
+  cursor: pointer;
+}
+
+.template-editor-note {
+  font-size: 0.78rem;
+  color: #666;
+  margin-top: 8px;
+  line-height: 1.6;
+}

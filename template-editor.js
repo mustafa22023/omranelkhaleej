@@ -383,6 +383,7 @@ body.theme-dark {
         <button type="button" data-action="image-mode">تبديل الصور</button>
         <button type="button" data-action="delete-mode">وضع الحذف</button>
         <button type="button" data-action="clear-image">حذف صورة</button>
+        <button type="button" data-action="save-all">حفظ GitHub + ملف</button>
         <button type="button" data-action="export">تصدير الاعدادات</button>
         <button type="button" data-action="import">استيراد الاعدادات</button>
         <button type="button" data-action="reset">استعادة الافتراضي</button>
@@ -472,6 +473,29 @@ body.theme-dark {
       };
       savePublishSettings(settings);
       alert('تم حفظ بيانات النشر');
+    });
+
+    panel.querySelector('[data-action="save-all"]').addEventListener('click', async () => {
+      const settings = {
+        token: publishInputs.token.value.trim(),
+        owner: publishInputs.owner.value.trim(),
+        repo: publishInputs.repo.value.trim(),
+        branch: publishInputs.branch.value.trim() || 'main'
+      };
+      savePublishSettings(settings);
+
+      if (!settings.token || !settings.owner || !settings.repo) {
+        alert('اكمل بيانات النشر (Token/Owner/Repo) أولا.');
+        return;
+      }
+
+      try {
+        await publishToGithub({ ...settings, content: config });
+        await saveConfigToProjectFile(config);
+        alert('تم الحفظ على GitHub وتم حفظ ملف site-config.json محليًا.');
+      } catch (err) {
+        alert(`فشل الحفظ: ${err.message}`);
+      }
     });
 
     panel.querySelector('[data-action="create-section"]').addEventListener('click', () => {
@@ -718,6 +742,34 @@ body.theme-dark {
       const errBody = await safeJson(putRes);
       throw new Error(errBody.message || 'فشل رفع ملف الاعدادات');
     }
+  }
+
+  async function saveConfigToProjectFile(content) {
+    const jsonText = JSON.stringify(content, null, 2);
+
+    if ('showSaveFilePicker' in window) {
+      const handle = await window.showSaveFilePicker({
+        suggestedName: 'site-config.json',
+        types: [
+          {
+            description: 'JSON File',
+            accept: { 'application/json': ['.json'] }
+          }
+        ]
+      });
+      const writable = await handle.createWritable();
+      await writable.write(jsonText);
+      await writable.close();
+      return;
+    }
+
+    const blob = new Blob([jsonText], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'site-config.json';
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   async function safeJson(res) {

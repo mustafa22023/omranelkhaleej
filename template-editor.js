@@ -346,6 +346,11 @@ body.theme-dark {
       }
 
       try {
+        const changed = await hasUnpublishedChanges();
+        if (!changed) {
+          alert('لا توجد تعديلات جديدة للنشر.');
+          return;
+        }
         quickPublish.disabled = true;
         quickPublish.textContent = 'جاري النشر...';
         await publishToGithub({ ...settings, content: config });
@@ -490,6 +495,12 @@ body.theme-dark {
       }
 
       try {
+        const changed = await hasUnpublishedChanges();
+        if (!changed) {
+          alert('لا توجد تعديلات جديدة. سيتم حفظ الملف محليا فقط.');
+          await saveConfigToProjectFile(config);
+          return;
+        }
         await publishToGithub({ ...settings, content: config });
         await saveConfigToProjectFile(config);
         alert('تم الحفظ على GitHub وتم حفظ ملف site-config.json محليًا.');
@@ -784,6 +795,44 @@ body.theme-dark {
       return `${base}\nHTTP Status: ${status}`;
     }
     return base;
+  }
+
+  async function hasUnpublishedChanges() {
+    const published = normalizeConfig(await loadPublishedConfig());
+    return !sameConfig(config, published);
+  }
+
+  function sameConfig(a, b) {
+    return stableStringify(normalizeForCompare(a)) === stableStringify(normalizeForCompare(b));
+  }
+
+  function normalizeForCompare(c) {
+    const n = normalizeConfig(c || {});
+    return {
+      texts: sortObjectKeys(n.texts || {}),
+      images: sortObjectKeys(n.images || {}),
+      colors: sortObjectKeys(n.colors || {}),
+      structure: {
+        addedSections: [...(n.structure?.addedSections || [])].sort((x, y) => String(x.id || '').localeCompare(String(y.id || ''))).map(sortObjectKeys),
+        addedProducts: [...(n.structure?.addedProducts || [])].sort((x, y) => String(x.id || '').localeCompare(String(y.id || ''))).map(sortObjectKeys),
+        removedSections: [...(n.structure?.removedSections || [])].map(String).sort(),
+        removedProducts: [...(n.structure?.removedProducts || [])].map(String).sort()
+      }
+    };
+  }
+
+  function sortObjectKeys(obj) {
+    if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return obj;
+    const out = {};
+    Object.keys(obj).sort().forEach((k) => {
+      const v = obj[k];
+      out[k] = (v && typeof v === 'object' && !Array.isArray(v)) ? sortObjectKeys(v) : v;
+    });
+    return out;
+  }
+
+  function stableStringify(obj) {
+    return JSON.stringify(obj);
   }
 
   async function saveConfigToProjectFile(content) {

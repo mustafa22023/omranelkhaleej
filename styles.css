@@ -834,6 +834,14 @@ body.theme-dark .icon {
   font: inherit;
 }
 
+.template-editor-grid button {
+  border: 1px solid #ddd;
+  background: #f8f8f8;
+  border-radius: 10px;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
 body.template-text-edit [data-template-text-id] {
   outline: 2px dashed rgba(30, 102, 245, 0.7);
   outline-offset: 2px;

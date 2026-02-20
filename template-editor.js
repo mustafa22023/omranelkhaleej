@@ -339,8 +339,11 @@ body.theme-dark {
     quickPublish.textContent = 'نشر للجميع';
 
     quickPublish.addEventListener('click', async () => {
-      const settings = askPublishSettings(loadPublishSettings());
-      if (!settings) return;
+      const settings = loadPublishSettings();
+      if (!settings.token || !settings.owner || !settings.repo) {
+        alert('اكمل بيانات النشر من لوحة المطور أولا.');
+        return;
+      }
 
       try {
         quickPublish.disabled = true;
@@ -359,20 +362,6 @@ body.theme-dark {
     });
 
     document.body.appendChild(quickPublish);
-  }
-
-  function askPublishSettings(existing) {
-    const token = prompt('GitHub Token:', existing.token || '');
-    if (!token) return null;
-    const owner = prompt('GitHub Owner:', existing.owner || '');
-    if (!owner) return null;
-    const repo = prompt('GitHub Repository:', existing.repo || '');
-    if (!repo) return null;
-    const branch = prompt('Branch:', existing.branch || 'main') || 'main';
-
-    const settings = { token: token.trim(), owner: owner.trim(), repo: repo.trim(), branch: branch.trim() };
-    savePublishSettings(settings);
-    return settings;
   }
 
   function buildDeveloperUI() {
@@ -394,8 +383,6 @@ body.theme-dark {
         <button type="button" data-action="image-mode">تبديل الصور</button>
         <button type="button" data-action="delete-mode">وضع الحذف</button>
         <button type="button" data-action="clear-image">حذف صورة</button>
-        <button type="button" data-action="add-section">اضافة قسم</button>
-        <button type="button" data-action="add-product">اضافة منتج</button>
         <button type="button" data-action="export">تصدير الاعدادات</button>
         <button type="button" data-action="import">استيراد الاعدادات</button>
         <button type="button" data-action="reset">استعادة الافتراضي</button>
@@ -411,6 +398,34 @@ body.theme-dark {
         <div class="template-editor-field"><label>بطاقات الوضع الغامق</label><input type="color" data-color-key="darkCard"></div>
       </div>
 
+      <h4>بيانات النشر</h4>
+      <div class="template-editor-grid">
+        <div class="template-editor-field"><label>GitHub Token</label><input type="password" data-publish="token" placeholder="ghp_..." /></div>
+        <div class="template-editor-field"><label>Owner</label><input type="text" data-publish="owner" /></div>
+        <div class="template-editor-field"><label>Repository</label><input type="text" data-publish="repo" /></div>
+        <div class="template-editor-field"><label>Branch</label><input type="text" data-publish="branch" placeholder="main" /></div>
+        <button type="button" data-action="save-publish">حفظ بيانات النشر</button>
+      </div>
+
+      <h4>اضافة قسم</h4>
+      <div class="template-editor-grid">
+        <div class="template-editor-field"><label>اسم القسم عربي</label><input type="text" data-section="title-ar" /></div>
+        <div class="template-editor-field"><label>Section Name English</label><input type="text" data-section="title-en" /></div>
+        <div class="template-editor-field"><label>معرف القسم (id)</label><input type="text" data-section="id" placeholder="new-section" /></div>
+        <div class="template-editor-field"><label>رابط صورة البنر</label><input type="text" data-section="banner" /></div>
+        <div class="template-editor-field"><label>رابط صورة بطاقة القسم</label><input type="text" data-section="card-image" /></div>
+        <button type="button" data-action="create-section">انشاء القسم</button>
+      </div>
+
+      <h4>اضافة منتج</h4>
+      <div class="template-editor-grid">
+        <div class="template-editor-field"><label>معرف القسم</label><input type="text" data-product="section-id" placeholder="black-structure" /></div>
+        <div class="template-editor-field"><label>اسم المنتج عربي</label><input type="text" data-product="name-ar" /></div>
+        <div class="template-editor-field"><label>Product Name English</label><input type="text" data-product="name-en" /></div>
+        <div class="template-editor-field"><label>رابط صورة المنتج</label><input type="text" data-product="image" /></div>
+        <button type="button" data-action="create-product">انشاء المنتج</button>
+      </div>
+
       <p class="template-editor-note">الادوات تظهر فقط عبر <b>?developer=1</b>.\nوضع الحذف: اضغط على قسم او منتج لحذفه. حذف صورة: اضغط على صورة لمسحها.</p>
     `;
 
@@ -422,6 +437,18 @@ body.theme-dark {
     const imageModeBtn = panel.querySelector('[data-action="image-mode"]');
     const deleteModeBtn = panel.querySelector('[data-action="delete-mode"]');
     const clearImageBtn = panel.querySelector('[data-action="clear-image"]');
+    const publishInputs = {
+      token: panel.querySelector('[data-publish="token"]'),
+      owner: panel.querySelector('[data-publish="owner"]'),
+      repo: panel.querySelector('[data-publish="repo"]'),
+      branch: panel.querySelector('[data-publish="branch"]')
+    };
+
+    const publishSettings = loadPublishSettings();
+    publishInputs.token.value = publishSettings.token || '';
+    publishInputs.owner.value = publishSettings.owner || '';
+    publishInputs.repo.value = publishSettings.repo || '';
+    publishInputs.branch.value = publishSettings.branch || 'main';
 
     toggle.addEventListener('click', () => panel.classList.toggle('is-open'));
     closeBtn.addEventListener('click', () => panel.classList.remove('is-open'));
@@ -436,18 +463,30 @@ body.theme-dark {
       });
     });
 
-    panel.querySelector('[data-action="add-section"]').addEventListener('click', () => {
-      const titleAr = prompt('اسم القسم (عربي):');
+    panel.querySelector('[data-action="save-publish"]').addEventListener('click', () => {
+      const settings = {
+        token: publishInputs.token.value.trim(),
+        owner: publishInputs.owner.value.trim(),
+        repo: publishInputs.repo.value.trim(),
+        branch: publishInputs.branch.value.trim() || 'main'
+      };
+      savePublishSettings(settings);
+      alert('تم حفظ بيانات النشر');
+    });
+
+    panel.querySelector('[data-action="create-section"]').addEventListener('click', () => {
+      const titleAr = panel.querySelector('[data-section="title-ar"]').value.trim();
       if (!titleAr) return;
-      const titleEn = prompt('Section name (English):', titleAr) || titleAr;
-      const id = slugify(prompt('معرف الرابط (مثال: new-section):', titleEn) || titleEn);
+      const titleEn = panel.querySelector('[data-section="title-en"]').value.trim() || titleAr;
+      const typedId = panel.querySelector('[data-section="id"]').value.trim();
+      const id = slugify(typedId || titleEn);
       if (!id) return;
       if (document.getElementById(id)) {
         alert('هذا المعرف مستخدم بالفعل');
         return;
       }
-      const banner = prompt('رابط صورة البنر (اختياري):', '') || '';
-      const cardImage = prompt('رابط صورة بطاقة القسم (اختياري):', banner) || banner;
+      const banner = panel.querySelector('[data-section="banner"]').value.trim();
+      const cardImage = panel.querySelector('[data-section="card-image"]').value.trim() || banner;
 
       const sectionDef = { id, titleAr, titleEn, banner, cardImage };
       config.structure.addedSections = uniqById([...config.structure.addedSections, sectionDef]);
@@ -455,18 +494,24 @@ body.theme-dark {
       addSectionToDom(sectionDef);
       assignTemplateIds();
       saveLocalConfig();
+
+      panel.querySelector('[data-section="title-ar"]').value = '';
+      panel.querySelector('[data-section="title-en"]').value = '';
+      panel.querySelector('[data-section="id"]').value = '';
+      panel.querySelector('[data-section="banner"]').value = '';
+      panel.querySelector('[data-section="card-image"]').value = '';
     });
 
-    panel.querySelector('[data-action="add-product"]').addEventListener('click', () => {
-      const sectionId = prompt('معرف القسم target section id:');
+    panel.querySelector('[data-action="create-product"]').addEventListener('click', () => {
+      const sectionId = panel.querySelector('[data-product="section-id"]').value.trim();
       if (!sectionId || !document.getElementById(sectionId)) {
         alert('القسم غير موجود');
         return;
       }
-      const nameAr = prompt('اسم المنتج (عربي):');
+      const nameAr = panel.querySelector('[data-product="name-ar"]').value.trim();
       if (!nameAr) return;
-      const nameEn = prompt('Product name (English):', nameAr) || nameAr;
-      const image = prompt('رابط صورة المنتج (اختياري):', '') || '';
+      const nameEn = panel.querySelector('[data-product="name-en"]').value.trim() || nameAr;
+      const image = panel.querySelector('[data-product="image"]').value.trim();
       const id = `prod-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
 
       const productDef = { id, sectionId, nameAr, nameEn, image };
@@ -475,6 +520,10 @@ body.theme-dark {
       addProductToDom(productDef);
       assignTemplateIds();
       saveLocalConfig();
+
+      panel.querySelector('[data-product="name-ar"]').value = '';
+      panel.querySelector('[data-product="name-en"]').value = '';
+      panel.querySelector('[data-product="image"]').value = '';
     });
 
     panel.querySelector('[data-action="reset"]').addEventListener('click', () => {
